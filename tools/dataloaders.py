@@ -4,19 +4,19 @@ import ast
 import wfdb
 import torch
 from torch.utils.data import Dataset
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 
-
-def encode_label(classes: list, unique_classes: list) -> list:
+def encode_label(classes: List, unique_classes: List) -> List:
     """
     Convert a list of classes to a one-hot encoded vector.
     
     Args:
-    - classes (list): List of classes.
-    - unique_classes (list): List of unique classes.
+    - classes (List): List of classes.
+    - unique_classes (List): List of unique classes.
     
     Returns:
-    - list: One-hot encoded vector.
+    - List: One-hot encoded vector.
     """
     
     
@@ -29,7 +29,7 @@ def encode_label(classes: list, unique_classes: list) -> list:
             encoded[class_to_index[cls]] = 1
     return encoded
 
-def decode_label(encoded_label: list, unique_classes: list) -> list:
+def decode_label(encoded_label: List, unique_classes: List) -> list:
     """
     Decode a one-hot vector to its corresponding classes.
     
@@ -53,14 +53,28 @@ class ECGDataset(Dataset):
     
     """
     
-    def __init__(self, path: str, sampling_rate: int):
+    def __init__(self, 
+                 path: str, 
+                 sampling_rate: int,
+                 test_folds: List = [9],
+                 mode: str = 'train',
+                 ):
         """
         Initialize the ECGDataset object.
         
         Args:
         - path (str): Path to the data directory.
         - sampling_rate (int): Sampling rate of the ECG signals.
+        - test_folds (List): List of test folds to be used for testing.
+        - mode (str): Mode of the dataset. Can be either 'train', 'val', or 'test'.
         """
+        
+        assert mode in ['train', 'val', 'test'], "Invalid mode: it must be either 'train', 'val', or 'test'."
+        self.mode = mode
+        self.test_folds = test_folds
+        self.train_folds = [i for i in range(10) if i not in test_folds]
+        self.take_folds = self.train_folds if mode == 'train' else test_folds
+        
         print("[INFO] Loading data...")
         self.Y = pd.read_csv(path + 'ptbxl_database.csv', index_col='ecg_id')
         self.Y.scp_codes = self.Y.scp_codes.apply(lambda x: ast.literal_eval(x))
@@ -75,6 +89,12 @@ class ECGDataset(Dataset):
         self.unique_superclasses = list(set(self.super_classes))
         
         self.X = self.load_raw_data(self.Y, sampling_rate, path)
+        
+        # take all the samples that are in the take_folds
+        self.X = self.X[np.isin(self.Y.strat_fold.values, self.take_folds)]
+        self.super_classes = [x for i, x in enumerate(self.super_classes) if self.Y.strat_fold.values[i] in self.take_folds]
+        
+        
 
     def __len__(self) -> int:
         """
@@ -109,7 +129,7 @@ class ECGDataset(Dataset):
                 
         out = {
             'x': torch.tensor(x, dtype=torch.float32),
-            'classes': [classes],
+            'y_decoded': [classes],
             'y': torch.tensor(classes_encoded, dtype=torch.long),
         }
         
