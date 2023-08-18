@@ -190,7 +190,7 @@ class DeepHeartModel(nn.Module):
             ]
         )
         self.cls_token = nn.Linear(dim, 1, bias=False)
-        self.proj_out = nn.Linear(dim, 5) # 5 classes
+        self.proj_out = nn.Linear(dim, 6) # 6 classes
         
         self.apply(self._init_weights)
         trunc_normal_(self.cls_token.weight, std=0.02)
