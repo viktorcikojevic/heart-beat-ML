@@ -49,17 +49,12 @@ class Extractor(nn.Module):
         )
         self.omega = omega
 
-    def forward(self, x, Lmax=None):
-    
-        if Lmax is not None:
-            # take random subset of the sequence
-            idx_start = torch.randint(0, x.shape[1] - Lmax, (1,)).item()
-            idx_end = idx_start + Lmax
-            print(idx_start, idx_end)
-            x = x[:, idx_start:idx_end, :]
-        
+    def forward(self, x):
+
+        # Positional embedding
         x = self.emb(self.omega * x).flatten(-2) # (B, T, 12, dim_base) -> (B, T, 12 * dim_base)
         
+        # Projection
         x = self.proj(x) # (B, T, 12 * dim_base) -> (B, T, dim)
         
         return x

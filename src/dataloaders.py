@@ -58,6 +58,7 @@ class ECGDataset(Dataset):
                  sampling_rate: int,
                  test_folds: List = [9],
                  mode: str = 'train',
+                 Ltrain: int = 256,
                  ):
         """
         Initialize the ECGDataset object.
@@ -74,6 +75,7 @@ class ECGDataset(Dataset):
         self.test_folds = test_folds
         self.train_folds = [i for i in range(10) if i not in test_folds]
         self.take_folds = self.train_folds if mode == 'train' else test_folds
+        self. Ltrain = Ltrain
         
         print("[INFO] Loading data...")
         self.Y = pd.read_csv(path + 'ptbxl_database.csv', index_col='ecg_id')
@@ -123,6 +125,10 @@ class ECGDataset(Dataset):
         std = np.std(x, axis=0, keepdims=True)
         x = (x - mean) / std
         
+        # perform augmentation if in training mode
+        if self.mode == 'train':
+            x = self.augment(x)
+            x = self.random_clip(x, self.Ltrain)
         
         classes = self.super_classes[idx]
         classes_encoded = encode_label([classes], self.unique_superclasses)
@@ -169,3 +175,18 @@ class ECGDataset(Dataset):
                 tmp.append(self.agg_df.loc[key].diagnostic_class)
         return list(set(tmp))
 
+    def random_clip(self, x, LMax):
+        
+        if Lmax is not None:
+            # take random subset of the sequence
+            idx_start = torch.randint(0, x.shape[1] - Lmax, (1,)).item()
+            idx_end = idx_start + Lmax
+            print(idx_start, idx_end)
+            x = x[:, idx_start:idx_end, :]
+    
+        return x
+    
+    def augment(self, x):
+        
+        return x
+    
