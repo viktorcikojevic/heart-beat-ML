@@ -93,7 +93,7 @@ class ECGDataset(Dataset):
         # Load numpy files
         self.X = np.concatenate([np.load(f) for f in X_files])
         self.super_classes = np.concatenate([np.load(f) for f in y_files])
-        self.unique_superclasses = list(set(self.super_classes))
+        self.unique_superclasses = sorted(list(set(self.super_classes))) # sorted for reproducibility
             
 
     def __len__(self):
