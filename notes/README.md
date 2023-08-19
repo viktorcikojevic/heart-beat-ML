@@ -5,6 +5,14 @@
 
 
 
+- model-s-plus-augms-again-w-resample (vs model-s-plus-augms-again): model s (small, number of heads 12, embd_dim = 384, L=768) included resampling. Results are actually worse than without resampling. 
+
+```
+valid_loss                   0.222439
+multi_label_accuracy         0.908536
+multilabel_hamming_loss      0.091464
+macro_f1_score_multilabel    0.636164```
+
 - baseline-plus-augms-again-ft1 (vs baseline-plus-augms-again): SWA, continuation from baseline-plus-augms-again. Results are basically the same.
 
 ```

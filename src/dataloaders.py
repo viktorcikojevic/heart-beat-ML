@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 import gc
 import os
-
+from scipy.interpolate import interp1d
 
 
 def encode_label(classes, unique_classes):
@@ -107,7 +107,7 @@ class ECGDataset(Dataset):
 
     def get_normalized_signal(self, idx):
         
-        x = self.X[idx]
+        x = self.X[idx].copy()
         
         # normalize the data
         mean = np.mean(x, axis=0, keepdims=True)
@@ -173,6 +173,7 @@ class ECGDataset(Dataset):
     def augment(self, x):
         
         
+        x = self.resample_augmentation(x)
         x = self.mix_up(x)
         x = self.cut_mix(x)
         x = self.cutout(x)
@@ -361,7 +362,41 @@ class ECGDataset(Dataset):
         
         return x_augmented
     
-    
+    def resample_augmentation(self, x, alpha_range=[0.5, 1.3]):
+        """
+        Resample the signal.
+
+        Args:
+        - x (np.ndarray): Input signal of shape (timesteps, features).
+        - alpha_range (float): Resampling factor. Value will be sampled uniformly from this range.
+                        Values > 1 speed up, 0 < values < 1 slow down the signal.
+
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+
+        # Number of timesteps
+        num_timesteps = x.shape[0]
+
+        # Create an interpolating function
+        f = interp1d(np.linspace(0, num_timesteps, num_timesteps, endpoint=False),
+                    x, axis=0, kind='linear', fill_value='extrapolate')
+
+        alpha = np.random.uniform(low=alpha_range[0], high=alpha_range[1])
+
+        # Create the new time grid
+        stretched_time = np.linspace(0, num_timesteps, int(num_timesteps * alpha), endpoint=False)
+
+        # Apply the function to get the augmented signal
+        x_augmented = f(stretched_time)
+
+        # If the signal is shortened, pad it with zeros or truncate if it's longer
+        if x_augmented.shape[0] < num_timesteps:
+            x_augmented = np.vstack((x_augmented, np.zeros((num_timesteps - x_augmented.shape[0], x.shape[1]))))
+        elif x_augmented.shape[0] > num_timesteps:
+            x_augmented = x_augmented[:num_timesteps, :]
+
+        return x_augmented
     
 
 def dict_to(x, device="cuda"):
