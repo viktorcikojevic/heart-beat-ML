@@ -8,19 +8,20 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 import gc
 import os
 
-def encode_label(classes: List, unique_classes: List) -> List:
-    """
-    Convert a list of classes to a one-hot encoded vector.
+
+
+def encode_label(classes, unique_classes):
+    
+    """ Convert a list of classes to a one-hot encoded vector.
     
     Args:
-    - classes (List): List of classes.
-    - unique_classes (List): List of unique classes.
+    - classes (List[str]): List of classes.
+    - unique_classes (List[str]): List of unique classes.
     
     Returns:
     - List: One-hot encoded vector.
     """
-    
-    
+
     
     class_to_index = {cls: idx for idx, cls in enumerate(unique_classes)}
     
@@ -30,9 +31,9 @@ def encode_label(classes: List, unique_classes: List) -> List:
             encoded[class_to_index[cls]] = 1
     return encoded
 
-def decode_label(encoded_label: List, unique_classes: List) -> List:
-    """
-    Decode a one-hot vector to its corresponding classes.
+def decode_label(encoded_label, unique_classes):
+    
+    """ Decode a one-hot vector to its corresponding classes.
     
     Args:
     - encoded_label (list): One-hot encoded vector.
@@ -41,6 +42,7 @@ def decode_label(encoded_label: List, unique_classes: List) -> List:
     Returns:
     - list: Corresponding classes.
     """
+    
     if sum(encoded_label) == 0:
         return ['']
     return [unique_classes[i] for i, val in enumerate(encoded_label) if val == 1]
@@ -92,9 +94,9 @@ class ECGDataset(Dataset):
         self.X = np.concatenate([np.load(f) for f in X_files])
         self.super_classes = np.concatenate([np.load(f) for f in y_files])
         self.unique_superclasses = list(set(self.super_classes))
-        
+            
 
-    def __len__(self) -> int:
+    def __len__(self):
         """
         Return the number of samples in the dataset.
         
@@ -102,6 +104,21 @@ class ECGDataset(Dataset):
         - int: Total number of samples.
         """
         return len(self.X)
+
+    def get_normalized_signal(self, idx):
+        
+        x = self.X[idx]
+        
+        # normalize the data
+        mean = np.mean(x, axis=0, keepdims=True)
+        std = np.std(x, axis=0, keepdims=True)
+        # x = (x - mean) / std # this scales too much the data
+        
+        
+        x = self.random_clip(x, self.L)
+        
+        return x
+
 
     def __getitem__(self, idx: int) -> (torch.Tensor, torch.Tensor):
         """
@@ -114,18 +131,12 @@ class ECGDataset(Dataset):
         - torch.Tensor: Raw ECG signal.
         - torch.Tensor: Corresponding one-hot encoded label.
         """
-        x = self.X[idx]
-        
-        # normalize the data
-        mean = np.mean(x, axis=0, keepdims=True)
-        std = np.std(x, axis=0, keepdims=True)
-        # x = (x - mean) / std # this scales too much the data
+        x = self.get_normalized_signal(idx)
         
         # perform augmentation if in training mode
         if self.mode == 'train':
             x = self.augment(x)
             
-        x = self.random_clip(x, self.L)
         
         classes = self.super_classes[idx]
         classes_encoded = encode_label([classes], self.unique_superclasses)
@@ -149,6 +160,9 @@ class ECGDataset(Dataset):
     def random_clip(self, x, Lmax):
         
         if Lmax is not None:
+            if Lmax == x.shape[0]:
+                return x
+            
             # take random subset of the sequence
             idx_start = torch.randint(0, x.shape[0] - Lmax, (1,)).item()
             idx_end = idx_start + Lmax
@@ -158,7 +172,194 @@ class ECGDataset(Dataset):
     
     def augment(self, x):
         
+        
+        x = self.mix_up(x)
+        x = self.cut_mix(x)
+        x = self.cutout(x)
+        x = self.convolve(x)
+        x = self.reverse(x)
+        x = self.translate(x)
+
+        
         return x
+    
+    
+    
+    
+    
+    def translate(self, x, p=0.5):
+        """ Perform translation augmentation on the input signal.
+    
+        Args:
+        - x (np.ndarray): Input signal.
+        - p (float): Probability of applying the convolution.
+        
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+        
+        if np.random.uniform() > p:
+            return x
+        
+        x_augmented = np.roll(x, np.random.randint(0, x.shape[0]), axis=0)
+        
+        return x_augmented
+    
+    
+    def convolve(self, x, p=0.5, window_size=5):
+        """ Perform uniform convolution augmentation on the input signal.
+    
+        Args:
+        - x (np.ndarray): Input signal.
+        - p (float): Probability of applying the convolution.
+        - window_size (int): Size of the convolution window.
+        
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+        
+        if np.random.uniform() > p:
+            return x
+        
+        # Create a uniform window. The sum of all its values should be 1.
+        window = np.ones(window_size) / window_size
+        
+        x_augmented = np.array([np.convolve(xi, window, mode='same') for xi in x.T]).T
+        
+        return x_augmented
+    
+    def reverse(self, x, p=0.9):
+        
+        """ Perform reverse augmentation on the input signal.
+        
+        Args:
+        - x (np.ndarray): Input signal.
+        - p (float): Probability of applying reverse
+        
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+        
+        if np.random.uniform() > p:
+            return x
+        
+        # reverse the signal along time dimension
+        x_augmented = x[::-1].copy()
+        
+        return x_augmented
+    
+    def mix_up(self, x, p=0.9, p_channel=0.7, mixing_factor=0.15):
+        
+        """ Perform mix_up augmentation on the input signal.
+        
+        Args:
+        - x (np.ndarray): Input signal.
+        - p_channel (float): Probability of applying mix_up on a channel.
+        - p (float): Probability of applying mix_up on a segment.
+        - mixing_factor (float): Mixing factor.
+        
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+        
+        if np.random.uniform() > p:
+            return x
+        
+        x_augmented = x.copy()
+        
+        # choose another sample randomly
+        x_2 = self.get_normalized_signal(np.random.randint(0, self.__len__() - 1))
+        
+        n_channels = x.shape[1]
+        
+        for channel in range(n_channels):
+            
+            if np.random.uniform() < p_channel:
+                
+                
+                
+                x_augmented[:, channel] = x_augmented[:, channel] + mixing_factor * x_2[:, channel]
+            
+        
+        return x_augmented
+    
+    def cut_mix(self, x, p=0.9, p_channel=0.3, cutout_size_range=[0.1, 0.4]):
+        
+        """ Perform cut_mix augmentation on the input signal.
+        
+        Args:
+        - x (np.ndarray): Input signal.
+        - p_channel (float): Probability of applying cutout on a channel.
+        - p (float): Probability of applying cutout on a segment.
+        - cutout_size_range (List[float]): Range of cutout size.
+        
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+        
+        if np.random.uniform() > p:
+            return x
+        
+        x_augmented = x.copy()
+        
+        # choose another sample randomly
+        x_2 = self.get_normalized_signal(np.random.randint(0, self.__len__() - 1))
+        
+        n_channels = x.shape[1]
+        
+        for channel in range(n_channels):
+            
+            if np.random.uniform() < p_channel:
+                
+
+                
+                cutout_size = int(np.random.uniform(low=cutout_size_range[0], high=cutout_size_range[1]) * x.shape[0])
+                
+                start = np.random.randint(0, x.shape[0] - cutout_size)
+                end = start + cutout_size
+                
+                
+                x_augmented[start:end, channel] = x_2[start:end, channel]
+            
+        
+        return x_augmented
+    
+    
+    def cutout(self, x, p=0.9, p_channel=0.7, cutout_size_range=[0.1, 0.4]):
+        
+        """ Perform cutout augmentation on the input signal.
+        
+        Args:
+        - x (np.ndarray): Input signal.
+        - p_channel (float): Probability of applying cutout on a channel.
+        - p (float): Probability of applying cutout on a segment.
+        - cutout_size_range (List[float]): Range of cutout size.
+        
+        Returns:
+        - np.ndarray: Augmented signal.
+        """
+        
+        if np.random.uniform() > p:
+            return x
+        
+        x_augmented = x.copy()
+        
+        n_channels = x.shape[1]
+        
+        for channel in range(n_channels):
+            
+            if np.random.uniform() < p_channel:
+                
+                cutout_size = int(np.random.uniform(low=cutout_size_range[0], high=cutout_size_range[1]) * x.shape[0])
+                
+                
+                start = np.random.randint(0, x.shape[0] - cutout_size)
+                end = start + cutout_size
+                
+                x_augmented[start:end, channel] = 0
+            
+        
+        return x_augmented
     
     
     
