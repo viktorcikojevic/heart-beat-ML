@@ -1,5 +1,5 @@
 {
-    "OUT": "experiments/baseline-plus-augms-again/",
+    "OUT": "experiments/baseline-plus-augms/",
     "PATH": "data/data_dumps/sr100/",
     "TEST_FOLDS": [9],
     "NUM_WORKERS_DATALOADER": 4,        

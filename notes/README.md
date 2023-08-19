@@ -7,6 +7,9 @@
 - baseline-plus-augms vs baseline: augmentations are helping. Overfitting occurs much later with augmentations.
 
 
+### note 
+
+baseline and baseline-plus-augms have had a bug in dataloader, where the labels were shuffled, so they don't have reproducible results. This has been fixed, and in "baseline-plus-augms-again" the results are reproducible. Check the commit after "77040d63210906f06968016dbf3de44131923c28" for the fix. 
 
 
 
