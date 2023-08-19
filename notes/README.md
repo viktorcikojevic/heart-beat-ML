@@ -1,5 +1,8 @@
 
 
+- timesteps: use 256 for training and 1000 for inference
+- 
+
 
 ## useful augmentations
 

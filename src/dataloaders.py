@@ -5,7 +5,8 @@ import wfdb
 import torch
 from torch.utils.data import Dataset
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
-
+import gc
+import os
 
 def encode_label(classes: List, unique_classes: List) -> List:
     """
@@ -29,7 +30,7 @@ def encode_label(classes: List, unique_classes: List) -> List:
             encoded[class_to_index[cls]] = 1
     return encoded
 
-def decode_label(encoded_label: List, unique_classes: List) -> list:
+def decode_label(encoded_label: List, unique_classes: List) -> List:
     """
     Decode a one-hot vector to its corresponding classes.
     
@@ -55,17 +56,15 @@ class ECGDataset(Dataset):
     
     def __init__(self, 
                  path: str, 
-                 sampling_rate: int,
                  test_folds: List = [9],
                  mode: str = 'train',
-                 Ltrain: int = 256,
+                 L: int = 512,
                  ):
         """
         Initialize the ECGDataset object.
         
         Args:
         - path (str): Path to the data directory.
-        - sampling_rate (int): Sampling rate of the ECG signals.
         - test_folds (List): List of test folds to be used for testing.
         - mode (str): Mode of the dataset. Can be either 'train', 'val', or 'test'.
         """
@@ -73,29 +72,26 @@ class ECGDataset(Dataset):
         assert mode in ['train', 'val', 'test'], "Invalid mode: it must be either 'train', 'val', or 'test'."
         self.mode = mode
         self.test_folds = test_folds
-        self.train_folds = [i for i in range(10) if i not in test_folds]
+        self.train_folds = [i for i in range(1,11) if i not in test_folds]
         self.take_folds = self.train_folds if mode == 'train' else test_folds
-        self. Ltrain = Ltrain
+        self.L = L
         
         print("[INFO] Loading data...")
-        self.Y = pd.read_csv(path + 'ptbxl_database.csv', index_col='ecg_id')
-        self.Y.scp_codes = self.Y.scp_codes.apply(lambda x: ast.literal_eval(x))
-
-        agg_df = pd.read_csv(path + 'scp_statements.csv', index_col=0)
-        self.agg_df = agg_df[agg_df.diagnostic == 1]
-
-        print("[INFO] Obtaining diagnostic_superclass ...")
-        self.Y['diagnostic_superclass'] = self.Y.scp_codes.apply(self.aggregate_diagnostic)
+        files = os.listdir(path)
+        files = [os.path.join(path, f) for f in files]
         
-        self.super_classes = [x[0] if len(x) > 0 else '' for x in self.Y['diagnostic_superclass'].values.tolist()]
+        
+        X_files = []
+        y_files = []
+        for fold in self.take_folds:
+             X_files.append(os.path.join(path,f"X_fold_{fold}.npy"))
+             y_files.append(os.path.join(path,f"superclasses_{fold}.npy"))
+        
+        
+        # Load numpy files
+        self.X = np.concatenate([np.load(f) for f in X_files])
+        self.super_classes = np.concatenate([np.load(f) for f in y_files])
         self.unique_superclasses = list(set(self.super_classes))
-        
-        self.X = self.load_raw_data(self.Y, sampling_rate, path)
-        
-        # take all the samples that are in the take_folds
-        self.X = self.X[np.isin(self.Y.strat_fold.values, self.take_folds)]
-        self.super_classes = [x for i, x in enumerate(self.super_classes) if self.Y.strat_fold.values[i] in self.take_folds]
-        
         
 
     def __len__(self) -> int:
@@ -123,66 +119,40 @@ class ECGDataset(Dataset):
         # normalize the data
         mean = np.mean(x, axis=0, keepdims=True)
         std = np.std(x, axis=0, keepdims=True)
-        x = (x - mean) / std
+        # x = (x - mean) / std # this scales too much the data
         
         # perform augmentation if in training mode
         if self.mode == 'train':
             x = self.augment(x)
-            x = self.random_clip(x, self.Ltrain)
+            
+        x = self.random_clip(x, self.L)
         
         classes = self.super_classes[idx]
         classes_encoded = encode_label([classes], self.unique_superclasses)
                 
-        out = {
-            'x': torch.tensor(x, dtype=torch.float32),
-            'y_decoded': [classes],
-            'y': torch.tensor(classes_encoded, dtype=torch.long),
-        }
+        # out =  {
+        #     'x': torch.tensor(x, dtype=torch.float32),
+        #     'y': torch.tensor(classes_encoded, dtype=torch.float32)
+        # }
+        
+        
+        out =  {
+            'x': torch.tensor(x, dtype=torch.float32)
+        },{ 'y': torch.tensor(classes_encoded, dtype=torch.float32)}
+        
+        # x = torch.tensor(x, dtype=torch.float32)
+        # y = torch.tensor(classes_encoded, dtype=torch.float32)
+        # return x, y
         
         return out
 
-    def load_raw_data(self, df: pd.DataFrame, sampling_rate: int, path: str) -> np.array:
-        """
-        Load raw signal data.
-        
-        Args:
-        - df (pd.DataFrame): DataFrame with ECG data.
-        - sampling_rate (int): Sampling rate of the ECG signals.
-        - path (str): Path to the data directory.
-        
-        Returns:
-        - np.array: Array of raw ECG signals.
-        """
-        if sampling_rate == 100:
-            data = [wfdb.rdsamp(path+f) for f in df.filename_lr]
-        else:
-            data = [wfdb.rdsamp(path+f) for f in df.filename_hr]
-        return np.array([signal for signal, meta in data])
-
-    def aggregate_diagnostic(self, y_dic: dict) -> list:
-        """
-        Aggregate diagnostic superclass.
-        
-        Args:
-        - y_dic (dict): Dictionary of scp_codes.
-        
-        Returns:
-        - list: Aggregated diagnostic superclass.
-        """
-        tmp = []
-        for key in y_dic.keys():
-            if key in self.agg_df.index:
-                tmp.append(self.agg_df.loc[key].diagnostic_class)
-        return list(set(tmp))
-
-    def random_clip(self, x, LMax):
+    def random_clip(self, x, Lmax):
         
         if Lmax is not None:
             # take random subset of the sequence
-            idx_start = torch.randint(0, x.shape[1] - Lmax, (1,)).item()
+            idx_start = torch.randint(0, x.shape[0] - Lmax, (1,)).item()
             idx_end = idx_start + Lmax
-            print(idx_start, idx_end)
-            x = x[:, idx_start:idx_end, :]
+            x = x[idx_start:idx_end, :]
     
         return x
     
@@ -190,3 +160,25 @@ class ECGDataset(Dataset):
         
         return x
     
+    
+    
+
+def dict_to(x, device="cuda"):
+    return {k: x[k].to(device) for k in x}
+
+
+def to_device(x, device="cuda"):
+    return tuple(dict_to(e, device) for e in x)
+
+
+class DeviceDataLoader:
+    def __init__(self, dataloader, device="cuda"):
+        self.dataloader = dataloader
+        self.device = device
+
+    def __len__(self):
+        return len(self.dataloader)
+
+    def __iter__(self):
+        for batch in self.dataloader:
+            yield tuple(dict_to(x, self.device) for x in batch)

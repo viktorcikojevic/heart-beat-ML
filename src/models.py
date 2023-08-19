@@ -168,6 +168,7 @@ class DeepHeartModel(nn.Module):
         dim_base=128,
         depth=12,
         head_size=32,
+        drop_path=0.0,
         **kwargs,
     ):
         super().__init__()
@@ -178,7 +179,7 @@ class DeepHeartModel(nn.Module):
                     dim=dim,
                     num_heads=dim // head_size,
                     mlp_ratio=4,
-                    drop_path=0.0 * (i / (depth - 1)),
+                    drop_path=drop_path * (i / (depth - 1)),
                     init_values=1,
                 )
                 for i in range(depth)
@@ -223,10 +224,10 @@ class DeepHeartModel(nn.Module):
     def no_weight_decay(self):
         return {"cls_token"}
 
-    def forward(self, x0, Lmax=None):
+    def forward(self, x0):
         
         # get the Fourier embedding
-        x = self.extractor(x0, Lmax)
+        x = self.extractor(x0['x'])
         
         # Attach a CLS token
         B, T, C = x.shape
