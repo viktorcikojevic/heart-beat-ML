@@ -1,12 +1,14 @@
 
 
-- timesteps: use 256 for training and 1000 for inference
-- 
+
+## experiment log
 
 
-## useful augmentations
+- baseline-plus-augms vs baseline: augmentations are helping. Overfitting occurs much later with augmentations.
 
-- n-points window averaging: average over n points, where n is between 3 and 15 
+
+
+
 
 
 ## useful papers & links related to ECG
