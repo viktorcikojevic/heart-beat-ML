@@ -173,7 +173,7 @@ class ECGDataset(Dataset):
     def augment(self, x):
         
         
-        x = self.resample_augmentation(x)
+        # x = self.resample_augmentation(x)
         x = self.mix_up(x)
         x = self.cut_mix(x)
         x = self.cutout(x)
