@@ -2,5 +2,4 @@ data/physionet.org/*
 *__pycache__*
 *__init__*
 data/data_dumps/*
-experiments/baseline/models/*
-experiments/baseline-plus-augms/models/*
+experiments/*/models/*

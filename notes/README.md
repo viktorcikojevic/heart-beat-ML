@@ -4,8 +4,35 @@
 ## experiment log
 
 
-- baseline-plus-augms vs baseline: augmentations are helping. Overfitting occurs much later with augmentations.
 
+- baseline-plus-augms-again-ft1 (vs baseline-plus-augms-again): SWA, continuation from baseline-plus-augms-again. Results are basically the same.
+
+```
+train_loss                    0.21057
+valid_loss                   0.220207
+multi_label_accuracy         0.911513
+multilabel_hamming_loss      0.088487
+macro_f1_score_multilabel    0.641824
+```
+
+- baseline-plus-augms-again (vs baseline): augmentations are helping. Overfitting occurs much later with augmentations.
+```
+train_loss                   0.208483
+valid_loss                   0.219635
+multi_label_accuracy          0.91159
+multilabel_hamming_loss       0.08841
+macro_f1_score_multilabel    0.641377
+```
+
+
+- baseline
+```
+train_loss                   0.226831
+valid_loss                   0.236417
+multi_label_accuracy         0.901664
+multilabel_hamming_loss      0.098336
+macro_f1_score_multilabel    0.606951
+```
 
 ### note 
 
