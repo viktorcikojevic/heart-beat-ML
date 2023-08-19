@@ -27,10 +27,14 @@ def read_config_file(file_path):
     # copy the config file to the experiment directory
     current_dir = os.path.dirname(os.path.realpath(__file__))
     print(f"Copying config file to experiment directory: {experiment_dir}")
-    try:
-        os.system(f"cp {file_path} {experiment_dir}")
-    except:
-        raise Exception(f"Could not copy config file to experiment directory: {experiment_dir}")
+    
+    os.makedirs(config_data["OUT"], exist_ok=True)
+    
+    # if there's no experiment_dir, raise an exception
+    if not os.path.exists(experiment_dir):
+        raise Exception(f"Experiment directory does not exist: {experiment_dir}")
+    
+    os.system(f"cp {file_path} {experiment_dir}")
     
     return config_data
 
@@ -76,15 +80,51 @@ def train(config):
     
     
     model = config["MODEL"](**config["MODEL_KWARGS"])
+    
     if config["WEIGHTS"]:
         print("Loading weights from ...", config["WEIGHTS"])
-        model.load_state_dict(torch.load(config["WEIGHTS"]))
-    
+
+        # Save the original state dict for comparison
+        original_state_dict = model.state_dict().copy()
+
+        # Load weights
+        loaded_weights = torch.load(config["WEIGHTS"], map_location=torch.device('cpu'))
+        
+        # If the saved model was saved with DataParallel
+        loaded_weights = {k.replace('module.', ''): v for k, v in loaded_weights.items()}
+        
+        # Verify if weights are the same
+        for ((layer_name, original_weight), (_, loaded_weight)) in zip(original_state_dict.items(), loaded_weights.items()):
+            if torch.equal(original_weight, loaded_weight):
+                raise Exception(f"[ERROR] Layer {layer_name} weights remain the same.")
+        
+        # Check if the model architecture and loaded weights match
+        if set(model.state_dict().keys()) != set(loaded_weights.keys()):
+            raise Exception("Model's architecture does not match with the saved weights. Ensure they are compatible.")
+        
+        # Verify if weights are loaded correctly, ie that they are not the same as current weights
+        for ((layer_name, original_weight), (_, loaded_weight)) in zip(original_state_dict.items(), loaded_weights.items()):
+            if torch.equal(original_weight, loaded_weight):
+                print(f"Original: {original_weight}")
+                print(f"Loaded: {loaded_weight}")
+                raise Exception(f"[ERROR] Layer {layer_name} weights remain the same.")
+                
+        # custom implementation of model.load_state_dict(loaded_weights)
+        for name, param in model.named_parameters():
+            if name in loaded_weights.keys():
+                param.data.copy_(loaded_weights[name])
+            else:
+                raise Exception(f"Layer {name} weights not found in saved weights.")
+                
+
+
+    model = nn.DataParallel(model)
+    model = model.cuda()
+
     # print number of million parameters
     print(f"Number of parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
     
-    model = nn.DataParallel(model)
-    model = model.cuda()
+    
     cbs = [
         GradientClip(3.0),
         CSVLogger(),
@@ -177,7 +217,6 @@ def main():
     ]
         
     seed_everything(config_data["SEED"])
-    os.makedirs(config_data["OUT"], exist_ok=True)
     train(config_data)
 
 
