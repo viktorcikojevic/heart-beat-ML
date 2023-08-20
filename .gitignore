@@ -3,3 +3,4 @@ data/physionet.org/*
 *__init__*
 data/data_dumps/*
 experiments/*/models/*
+experiments/baseline-plus-augms-manyfolds/*/models/*
