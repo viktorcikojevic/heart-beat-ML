@@ -5,3 +5,4 @@ data/data_dumps/*
 experiments/*/models/*
 experiments/baseline-plus-augms-manyfolds/*/models/*
 experiments/baseline-plus-augms-manyfolds-fft/*/models/*
+experiments/baseline-plus-augms-manymodels/*/models/*
