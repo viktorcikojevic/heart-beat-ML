@@ -61,6 +61,8 @@ class ECGDataset(Dataset):
                  test_folds: List = [9],
                  mode: str = 'train',
                  L: int = 512,
+                 train_on_ffts: bool = False,
+                 nfft_components: int = 192,
                  ):
         """
         Initialize the ECGDataset object.
@@ -69,6 +71,8 @@ class ECGDataset(Dataset):
         - path (str): Path to the data directory.
         - test_folds (List): List of test folds to be used for testing.
         - mode (str): Mode of the dataset. Can be either 'train', 'val', or 'test'.
+        - train_on_ffts (bool): If True, train on FFTs instead of raw signals.
+        - nfft_components (int): Number of FFT components to use.
         """
         
         assert mode in ['train', 'val', 'test'], "Invalid mode: it must be either 'train', 'val', or 'test'."
@@ -77,6 +81,12 @@ class ECGDataset(Dataset):
         self.train_folds = [i for i in range(1,11) if i not in test_folds]
         self.take_folds = self.train_folds if mode == 'train' else test_folds
         self.L = L
+        self.train_on_ffts = train_on_ffts
+        self.nfft_components = nfft_components
+        
+        if self.train_on_ffts:
+            self.L = 1000 # take all raw signals and then compute FFTs on the fly
+        
         
         print("[INFO] Loading data...")
         files = os.listdir(path)
@@ -131,15 +141,43 @@ class ECGDataset(Dataset):
         - torch.Tensor: Raw ECG signal.
         - torch.Tensor: Corresponding one-hot encoded label.
         """
+        
+        classes = self.super_classes[idx]
+        classes_encoded = encode_label([classes], self.unique_superclasses)
+        
+        # if len(np.unique(classes_encoded)) < 2:
+        #     # skip this sample and get another one
+        #     return self.__getitem__(np.random.randint(0, self.__len__() - 1))
+        
         x = self.get_normalized_signal(idx)
         
         # perform augmentation if in training mode
         if self.mode == 'train':
             x = self.augment(x)
             
+        if self.train_on_ffts:
+            num_channels = x.shape[1]
+            x_new = []
+            
+            for channel in range(num_channels):
+                x_channel = x[:, channel]
+
+            
+                # remove k=0 component
+                x_channel = x_channel - np.mean(x_channel) 
+                x_fft = np.fft.fftn(x_channel)
+                # keep only the first nfft_components
+                x_fft_keep = x_fft[:self.nfft_components]
+                # normalize
+                mean = np.mean(x_fft_keep)
+                std = np.std(x_fft_keep)
+                x_fft_keep = (x_fft_keep - mean) / std
+                x_new.append(x_fft_keep)
         
-        classes = self.super_classes[idx]
-        classes_encoded = encode_label([classes], self.unique_superclasses)
+            x = np.array(x_new).T
+            
+        
+        
                 
         # out =  {
         #     'x': torch.tensor(x, dtype=torch.float32),
