@@ -1,0 +1,8 @@
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-1; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-1 TEST_FOLDS [1,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-2; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-2 TEST_FOLDS [2,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-3; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-3 TEST_FOLDS [3,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-4; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-4 TEST_FOLDS [4,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-5; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-5 TEST_FOLDS [5,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-6; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-6 TEST_FOLDS [6,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-7; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-7 TEST_FOLDS [7,9,10]
+mkdir experiments/baseline-plus-augms-manyfolds-fft/fold-8; python train.py --config-file config.json OUT experiments/baseline-plus-augms-manyfolds-fft/fold-8 TEST_FOLDS [8,9,10]
