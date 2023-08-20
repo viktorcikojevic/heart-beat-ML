@@ -2,7 +2,7 @@ import torch
 from sklearn.metrics import hamming_loss
 from sklearn.metrics import f1_score
 
-def multi_label_accuracy(y_pred, targets, threshold=0.5):
+def multi_label_accuracy(y_pred, targets, threshold=0.5, apply_sigmoid=True):
     """
     Compute multi-label accuracy.
     
@@ -10,7 +10,11 @@ def multi_label_accuracy(y_pred, targets, threshold=0.5):
     targets: Tensor of shape [batch_size, n_classes] - True multilabels
     threshold: Threshold for converting logits to binary labels. Defaults to 0.5.
     """
-    y_pred_bin = (torch.sigmoid(y_pred) > threshold).float()  # Convert logits to 0 or 1
+    if apply_sigmoid:
+        y_pred_bin = (torch.sigmoid(y_pred) > threshold).float()  # Convert logits to 0 or 1
+    else:
+        y_pred_bin = (y_pred > threshold).float()  # Convert logits to 0 or 1
+        
     
     targets = targets['y']
     
@@ -22,12 +26,15 @@ def multi_label_accuracy(y_pred, targets, threshold=0.5):
 
 
 
-def multilabel_hamming_loss(y_pred, targets, threshold=0.5):
-    y_pred_bin = (torch.sigmoid(y_pred) > threshold).cpu().numpy()
+def multilabel_hamming_loss(y_pred, targets, threshold=0.5, apply_sigmoid=True):
+    if apply_sigmoid:
+        y_pred_bin = (torch.sigmoid(y_pred) > threshold).cpu().numpy()
+    else:
+        y_pred_bin = (y_pred > threshold).cpu().numpy()
     return hamming_loss(targets['y'].cpu().numpy(), y_pred_bin)
 
 
-def macro_f1_score_multilabel(y_pred, y_true, threshold=0.5):
+def macro_f1_score_multilabel(y_pred, y_true, threshold=0.5, apply_sigmoid=True):
     """
     Compute the macro averaged F1 score for multilabel classification.
     
@@ -35,6 +42,9 @@ def macro_f1_score_multilabel(y_pred, y_true, threshold=0.5):
     y_true: Tensor of shape [batch_size, n_classes] - True multilabels
     threshold: Threshold for converting logits to binary labels. Defaults to 0.5.
     """
-    y_pred_bin = (torch.sigmoid(y_pred) > threshold).float()  # Convert logits to 0 or 1
+    if apply_sigmoid:
+        y_pred_bin = (torch.sigmoid(y_pred) > threshold).float()
+    else:
+        y_pred_bin = (y_pred > threshold).float()
     
     return f1_score(y_true['y'].cpu().numpy(), y_pred_bin.cpu().numpy(), average='macro', zero_division=1)

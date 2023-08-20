@@ -18,24 +18,26 @@ from pdb import set_trace
 from src.loss import binary_cross_entropy
 from src.metrics import *
 
-def read_config_file(file_path):
+def read_config_file(file_path, copy_config_file=True):
     with open(file_path, "r") as f:
         config_data = json.load(f)
     
-    experiment_dir = config_data["OUT"]    
-    
-    # copy the config file to the experiment directory
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    print(f"Copying config file to experiment directory: {experiment_dir}")
-    
-    os.makedirs(config_data["OUT"], exist_ok=True)
-    
-    # if there's no experiment_dir, raise an exception
-    if not os.path.exists(experiment_dir):
-        raise Exception(f"Experiment directory does not exist: {experiment_dir}")
-    
-    os.system(f"cp {file_path} {experiment_dir}")
-    
+    if copy_config_file:
+        
+        experiment_dir = config_data["OUT"]    
+        
+        # copy the config file to the experiment directory
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        print(f"Copying config file to experiment directory: {experiment_dir}")
+        
+        os.makedirs(config_data["OUT"], exist_ok=True)
+        
+        # if there's no experiment_dir, raise an exception
+        if not os.path.exists(experiment_dir):
+            raise Exception(f"Experiment directory does not exist: {experiment_dir}")
+        
+        os.system(f"cp {file_path} {experiment_dir}")
+        
     return config_data
 
 
