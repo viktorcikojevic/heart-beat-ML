@@ -8,6 +8,7 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 import gc
 import os
 from scipy.interpolate import interp1d
+from tqdm import tqdm
 
 
 def encode_label(classes, unique_classes):
@@ -63,6 +64,7 @@ class ECGDataset(Dataset):
                  L: int = 512,
                  train_on_ffts: bool = False,
                  nfft_components: int = 192,
+                 augment: bool = False,
                  ):
         """
         Initialize the ECGDataset object.
@@ -73,6 +75,7 @@ class ECGDataset(Dataset):
         - mode (str): Mode of the dataset. Can be either 'train', 'val', or 'test'.
         - train_on_ffts (bool): If True, train on FFTs instead of raw signals.
         - nfft_components (int): Number of FFT components to use.
+        - augment (bool): If True, perform data augmentation.
         """
         
         assert mode in ['train', 'val', 'test'], "Invalid mode: it must be either 'train', 'val', or 'test'."
@@ -83,28 +86,82 @@ class ECGDataset(Dataset):
         self.L = L
         self.train_on_ffts = train_on_ffts
         self.nfft_components = nfft_components
+        self.augment = augment
         
         if self.train_on_ffts:
             self.L = 1000 # take all raw signals and then compute FFTs on the fly
         
         
         print("[INFO] Loading data...")
-        files = os.listdir(path)
-        files = [os.path.join(path, f) for f in files]
         
+        def aggregate_diagnostic(y_dic) -> list:
+            tmp = []
+            for key in y_dic.keys():
+                if key in agg_df.index:
+                    tmp.append(agg_df.loc[key].diagnostic_class)
+            return list(set(tmp))
+
+        def load_raw_data(df: pd.DataFrame, sampling_rate: int, path: str) -> np.array:
+            if sampling_rate == 100:
+                data = [wfdb.rdsamp(path+f) for f in df.filename_lr]
+            else:
+                data = [wfdb.rdsamp(path+f) for f in df.filename_hr]
+            return np.array([signal for signal, meta in data])
+
+
+        Y = pd.read_csv(path + 'ptbxl_database.csv', index_col='ecg_id')
+        Y.scp_codes = Y.scp_codes.apply(lambda x: ast.literal_eval(x))
+
+        agg_df = pd.read_csv(path + 'scp_statements.csv', index_col=0)
+        agg_df = agg_df[agg_df.diagnostic == 1]
+
+        print(f"[INFO] Obtaining diagnostic_superclass for {self.mode} mode ...")
+        Y['diagnostic_superclass'] = Y.scp_codes.apply(aggregate_diagnostic)
+
+        self.super_classes = [x if len(x) > 0 else '' for x in Y['diagnostic_superclass'].values.tolist()]
+        self.unique_superclasses = sorted(list(set(np.concatenate(Y['diagnostic_superclass'].values.tolist()))))
+        self.super_classes_encoded = np.array([encode_label(x, self.unique_superclasses) for x in self.super_classes])
         
-        X_files = []
-        y_files = []
-        for fold in self.take_folds:
-             X_files.append(os.path.join(path,f"X_fold_{fold}.npy"))
-             y_files.append(os.path.join(path,f"superclasses_{fold}.npy"))
+        # Load X
+        self.X = load_raw_data(Y, sampling_rate=100, path=path)
         
+        # take "take_folds" folds for X and y
+        self.X = self.X[np.where(Y.strat_fold.isin(self.take_folds))]
+        self.super_classes_encoded = self.super_classes_encoded[np.where(Y.strat_fold.isin(self.take_folds))]
         
-        # Load numpy files
-        self.X = np.concatenate([np.load(f) for f in X_files])
-        self.super_classes = np.concatenate([np.load(f) for f in y_files])
-        self.unique_superclasses = sorted(list(set(self.super_classes))) # sorted for reproducibility
+        # remove samples with no superclass
+        black_list_indices = np.where(self.super_classes_encoded.sum(axis=1) == 0)[0]
+        mask = np.ones(self.super_classes_encoded.shape[0], dtype=bool)
+        mask[black_list_indices] = False
+        self.X = self.X[mask]
+        self.super_classes_encoded = self.super_classes_encoded[mask]
+        
+        # print some info
+        print(f"X.shape: {self.X.shape}, y.shape: {self.super_classes_encoded.shape}")
+        print(f"X.min: {self.X.min()}, X.max: {self.X.max()}")
+        
+        # Calculate sample weights
+        if self.mode == 'train':
+            self.sample_weights = self.calculate_sample_weights()
             
+        # release memory
+        del Y, agg_df
+        gc.collect()
+        
+            
+
+    def calculate_sample_weights(self):
+        
+        # self.super_classes_encoded is (B, 5) shape
+        
+        # Count occurrences of each superclass
+        counts = np.sum(self.super_classes_encoded, axis=0) # (5,)
+        class_weights = 1.0 / (counts + 1e-6)  # Compute inverse frequency with a small constant to avoid division by zero. Shape: (5,)
+
+        # get sample weights
+        sample_weights = self.super_classes_encoded @ class_weights
+
+        return torch.from_numpy(sample_weights).float()  # Convert to PyTorch tensor
 
     def __len__(self):
         """
@@ -120,10 +177,13 @@ class ECGDataset(Dataset):
         x = self.X[idx].copy()
         
         # normalize the data
-        mean = np.mean(x, axis=0, keepdims=True)
-        std = np.std(x, axis=0, keepdims=True)
+        # mean = np.mean(x, axis=0, keepdims=True)
+        # std = np.std(x, axis=0, keepdims=True)
         # x = (x - mean) / std # this scales too much the data
         
+        n_channels = x.shape[1]
+        for ch in range(n_channels):
+            x[:, ch] = (x[:, ch] - x[:, ch].min()) / (x[:, ch].max() - x[:, ch].min() + 1e-6) + 0.5
         
         x = self.random_clip(x, self.L)
         
@@ -142,18 +202,17 @@ class ECGDataset(Dataset):
         - torch.Tensor: Corresponding one-hot encoded label.
         """
         
-        classes = self.super_classes[idx]
-        classes_encoded = encode_label([classes], self.unique_superclasses)
+        y = self.super_classes_encoded[idx]
         
-        # if len(np.unique(classes_encoded)) < 2:
+        # if len(np.unique(y)) < 2:
         #     # skip this sample and get another one
         #     return self.__getitem__(np.random.randint(0, self.__len__() - 1))
         
         x = self.get_normalized_signal(idx)
         
         # perform augmentation if in training mode
-        if self.mode == 'train':
-            x = self.augment(x)
+        if self.mode == 'train' and self.augment and not self.train_on_ffts:
+            x = self.augment_samples(x)
             
         if self.train_on_ffts:
             num_channels = x.shape[1]
@@ -174,30 +233,20 @@ class ECGDataset(Dataset):
                 x_fft_keep = (x_fft_keep - mean) / std
                 x_new.append(x_fft_keep)
         
+        
             x = np.array(x_new).T
             
         
         
-                
-        # out =  {
-        #     'x': torch.tensor(x, dtype=torch.float32),
-        #     'y': torch.tensor(classes_encoded, dtype=torch.float32)
-        # }
-        
-        
         out =  {
             'x': torch.tensor(x, dtype=torch.float32)
-        },{ 'y': torch.tensor(classes_encoded, dtype=torch.float32)}
-        
-        # x = torch.tensor(x, dtype=torch.float32)
-        # y = torch.tensor(classes_encoded, dtype=torch.float32)
-        # return x, y
+        },{ 'y': torch.tensor(y, dtype=torch.float32)}
         
         return out
 
     def random_clip(self, x, Lmax):
         
-        if Lmax is not None:
+        if Lmax is not None and Lmax < 1000:
             if Lmax == x.shape[0]:
                 return x
             
@@ -208,7 +257,7 @@ class ECGDataset(Dataset):
     
         return x
     
-    def augment(self, x):
+    def augment_samples(self, x):
         
         
         # x = self.resample_augmentation(x)
@@ -287,7 +336,7 @@ class ECGDataset(Dataset):
         
         return x_augmented
     
-    def mix_up(self, x, p=0.9, p_channel=0.7, mixing_factor=0.15):
+    def mix_up(self, x, p=0.9, p_channel=0.3, mixing_factor=0.15):
         
         """ Perform mix_up augmentation on the input signal.
         

@@ -15,6 +15,7 @@ import os
 import sys
 from src.models import DeepHeartModel
 from pdb import set_trace
+from torch.utils.data import WeightedRandomSampler
 from src.loss import binary_cross_entropy
 from src.metrics import *
 
@@ -50,12 +51,21 @@ def train(config):
         mode="train",
         L=config["LMAX"],
         test_folds=config["TEST_FOLDS"],
+        train_on_ffts=config["TRAIN_ON_FFTS"],
+        augment=config["AUGMENT"],
+        nfft_components=config["NFFT_COMPONENTS"],
     )
+    
+    sampler = WeightedRandomSampler(weights=ds_train.sample_weights, num_samples=len(ds_train.sample_weights), replacement=True)
+    
+    if config["USE_WEIGHTED_SAMPLER"]:
+        print("[INFO] Using weighted sampler.")
 
     dl_train = DeviceDataLoader(
         torch.utils.data.DataLoader(
             ds_train,
             batch_size=config["BATCH_SIZE"],
+            sampler=sampler if config["USE_WEIGHTED_SAMPLER"] else None,
             num_workers=config["NUM_WORKERS_DATALOADER"],
             persistent_workers=True,
         )
@@ -66,6 +76,9 @@ def train(config):
         mode="val",
         L=config["LMAX"],
         test_folds=config["TEST_FOLDS"],
+        train_on_ffts=config["TRAIN_ON_FFTS"],
+        augment=False,
+        nfft_components=config["NFFT_COMPONENTS"]
     )
 
     dl_val = DeviceDataLoader(
@@ -213,7 +226,7 @@ def main():
     else:
         config_data["LOSS_FUNC"] = getattr(sys.modules[__name__], config_data["LOSS_FUNC"])
         
-    # config_data["METRICS"] = binary_cross_entropy
+
     config_data["METRICS"] = [
         getattr(sys.modules[__name__], cfg) for cfg in config_data["METRICS"]
     ]
