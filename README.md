@@ -28,6 +28,9 @@ notebooks/
 ├── heart-beat-speed.ipynb
 └── qrs_detection.ipynb
 ```
+# Experiment Log
+
+- See [here](notes/README.md)
 
 # Training
 
