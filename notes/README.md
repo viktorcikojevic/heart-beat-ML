@@ -3,53 +3,46 @@
 
 ## experiment log
 
-
-- baseline-plus-augms-manyfolds: trained 8 models on different folds and averaged the predictions. Results are slighlty better than baseline-plus-augms-again. Check ensemble-evaluation.ipynb for more details. 
-
+- baseline-plus-augms-manymodels: ensemble of 4 folds and 2 different training schemes (8 models).
 
 
 
-- model-s-plus-augms-again-w-resample (vs model-s-plus-augms-again): model s (small, number of heads 12, embd_dim = 384, L=768) included resampling. Results are actually worse than without resampling. 
 
-```
-valid_loss                   0.222439
-multi_label_accuracy         0.908536
-multilabel_hamming_loss      0.091464
-macro_f1_score_multilabel    0.636164
-```
+- baseline-plus-weightedsampler (vs baseline): results are similar to the baseline, a bit worse.
 
-- baseline-plus-augms-again-ft1 (vs baseline-plus-augms-again): SWA, continuation from baseline-plus-augms-again. Results are basically the same.
 
 ```
-train_loss                    0.21057
-valid_loss                   0.220207
-multi_label_accuracy         0.911513
-multilabel_hamming_loss      0.088487
-macro_f1_score_multilabel    0.641824
+epoch                               2
+train_loss                   0.399473
+valid_loss                   0.376508
+multi_label_accuracy         0.837529
+multilabel_hamming_loss      0.162471
+macro_f1_score_multilabel    0.576434
 ```
 
-- baseline-plus-augms-again (vs baseline): augmentations are helping. Overfitting occurs much later with augmentations.
+- baseline-plus-augms (vs baseline): augmentations are helping. Overfitting occurs much later with augmentations.
+
+
 ```
-train_loss                   0.208483
-valid_loss                   0.219635
-multi_label_accuracy          0.91159
-multilabel_hamming_loss       0.08841
-macro_f1_score_multilabel    0.641377
+epoch                              46
+train_loss                   0.271569
+valid_loss                   0.349168
+multi_label_accuracy         0.856433
+multilabel_hamming_loss      0.143567
+macro_f1_score_multilabel    0.620491
 ```
 
 
 - baseline
-```
-train_loss                   0.226831
-valid_loss                   0.236417
-multi_label_accuracy         0.901664
-multilabel_hamming_loss      0.098336
-macro_f1_score_multilabel    0.606951
-```
 
-### note 
-
-baseline and baseline-plus-augms have had a bug in dataloader, where the labels were shuffled, so they don't have reproducible results. This has been fixed, and in "baseline-plus-augms-again" the results are reproducible. Check the commit after "77040d63210906f06968016dbf3de44131923c28" for the fix. 
+```
+epoch                               4
+train_loss                   0.323445
+valid_loss                   0.380388
+multi_label_accuracy         0.843289
+multilabel_hamming_loss      0.156712
+macro_f1_score_multilabel    0.564015
+```
 
 
 

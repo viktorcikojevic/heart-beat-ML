@@ -2,12 +2,32 @@
 
 
 
+# Repo structure
 
 
-
-- check the notes [here](notes/README.md)
-- EDA is performed [here](notebooks/eda.ipynb)
-- dataloaders are [here](tools/dataloaders.py)
+```
+experiments
+├── baseline
+├── baseline-plus-augms
+├── baseline-plus-augms-manymodels
+└── baseline-plus-weightedsampler
+src
+├── dataloaders.py
+├── fastai_fix.py
+├── __init__.py
+├── loss.py
+├── metrics.py
+├── models.py
+└── utils.py
+notebooks/
+├── correlation-analysis.ipynb
+├── debug.ipynb
+├── eda.ipynb
+├── fft-viz.ipynb
+├── generate_dataset.ipynb
+├── heart-beat-speed.ipynb
+└── qrs_detection.ipynb
+```
 
 # Training
 
