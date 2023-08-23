@@ -5,10 +5,10 @@
 
 - baseline-plus-augms-manymodels: ensemble of 4 folds and 2 different training schemes (8 models).
 
+    - check [here](experiments/baseline-plus-augms-manymodels/ensemble-evaluation.ipynb) for ensemble evaluation.
 
 
-
-- baseline-plus-weightedsampler (vs baseline): results are similar to the baseline, a bit worse.
+- baseline-plus-weightedsampler (vs baseline): results are similar to the baseline, a bit worse. Epoch with min `macro_f1_score_multilabel` data.
 
 
 ```
@@ -20,7 +20,7 @@ multilabel_hamming_loss      0.162471
 macro_f1_score_multilabel    0.576434
 ```
 
-- baseline-plus-augms (vs baseline): augmentations are helping. Overfitting occurs much later with augmentations.
+- baseline-plus-augms (vs baseline): augmentations are helping. Overfitting occurs much later with augmentations. Epoch with min `macro_f1_score_multilabel` data.
 
 
 ```
@@ -33,7 +33,7 @@ macro_f1_score_multilabel    0.620491
 ```
 
 
-- baseline
+- baseline. Epoch with min `macro_f1_score_multilabel` data.
 
 ```
 epoch                               4
