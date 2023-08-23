@@ -11,7 +11,7 @@
   "AUGMENT": true,     
   "TRAIN_ON_FFTS": false, 
   "NFFT_COMPONENTS": 192,
-  "USE_WEIGHTED_SAMPLER": true,
+  "USE_WEIGHTED_SAMPLER": false,
   "EPOCHS": 48,
   "LR_MAX": 3e-4,          
   "MODEL": "DeepHeartModel", 
